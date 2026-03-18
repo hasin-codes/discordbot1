@@ -234,22 +234,7 @@ client.on('messageCreate', async message => {
   if (thread.parentId !== process.env.BAD_REPORT_CHANNEL_ID) return;
 
   const content = message.content.trim();
-  if (!content || content.length < 8) return; // ignore very short messages
-
-  const isMention = message.mentions.has(client.user.id);
-
-  // Passive monitoring — only trigger on clear questions or requests for help
-  // Does NOT trigger on: hi, hello, thanks, random text, statements
-  const isQuestion = /\?$/.test(content); // ends with question mark
-  const isHelpRequest =
-    /^(how|what|why|when|where|can you|could you|do you|does|is there|are there|i need|i cant|i can't|help me|please help)/i
-    .test(content);
-
-  // Must be either a mention OR a genuine question/help request
-  if (!isMention && !isQuestion && !isHelpRequest) return;
-
-  // Minimum length for passive monitoring (mentions bypass this)
-  if (!isMention && content.length < 15) return;
+  if (!content) return;
 
   // Find the issue this thread belongs to
   const { data: issue } = await supabase
@@ -263,7 +248,7 @@ client.on('messageCreate', async message => {
   // Don't answer resolved/closed issues
   if (issue.status === 'resolved' || issue.status === 'closed') return;
 
-  // Save user message
+  // Save user message to history
   await saveMessage({
     issueId:      issue.id,
     role:         'user',
@@ -271,10 +256,10 @@ client.on('messageCreate', async message => {
     discordMsgId: message.id
   });
 
-  // Show typing indicator
+  // Show typing indicator while processing
   await thread.sendTyping();
 
-  // Run RAG
+  // rag.js decides everything from here — casual, question, escalate
   await answerInThread(client, thread, issue, content);
 });
 
