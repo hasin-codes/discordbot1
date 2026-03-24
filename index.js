@@ -30,6 +30,7 @@ const { initCollections } = require('./lib/qdrant');
 const { runAgent } = require('./lib/agent');
 const { updateThreadBrief } = require('./lib/context');
 const supabase = require('./lib/supabase');
+const ingestion = require('./lib/ingestion');
 
 // ─── Client setup ────────────────────────────────────────────────────
 const client = new Client({
@@ -61,6 +62,9 @@ client.once('clientReady', async () => {
   // Start BullMQ workers — pass client so workers can call Discord API
   startWorkers(client);
 
+  // Init message ingestion system (backfill + batch writer)
+  await ingestion.init(client);
+
   // Reminder job every hour + once 30s after startup
   setInterval(() => runReminderJob(client), 60 * 60 * 1000);
   setTimeout(() => runReminderJob(client), 30 * 1000);
@@ -69,12 +73,14 @@ client.once('clientReady', async () => {
 // Graceful shutdown — close workers cleanly when process exits
 process.on('SIGTERM', async () => {
   log.info('SIGTERM received — shutting down gracefully');
+  await ingestion.shutdown();
   await stopWorkers();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   log.info('SIGINT received — shutting down gracefully');
+  await ingestion.shutdown();
   await stopWorkers();
   process.exit(0);
 });
@@ -231,6 +237,9 @@ client.on('threadCreate', async (thread, newlyCreated) => {
 // Drop this entire block into index.js replacing the existing messageCreate handler
 
 client.on('messageCreate', async message => {
+  // Community message ingestion (non-blocking, filtered internally)
+  ingestion.handleMessage(message);
+
   if (message.author.bot) return;
   if (!message.channel.isThread()) return;
 
