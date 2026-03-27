@@ -85,8 +85,7 @@ async function embedBatchWithRetry(texts) {
       return vectors.map(vec => normalize(vec));
     } catch (err) {
       const isLast = attempt === maxRetries;
-      logger.warn('embedder', `Batch embedding attempt ${attempt}/${maxRetries} failed`, {
-        error: err.message,
+      logger.warn('embedder', `Batch embedding attempt ${attempt}/${maxRetries} failed: ${err.message}`, {
         batchSize: texts.length,
       });
       if (isLast) return null;
@@ -104,9 +103,10 @@ async function embedBatchWithRetry(texts) {
  * @returns {Promise<Map<number, number[]>>} message index → normalized vector (zero vec on failure)
  */
 async function embedMessagesForDetection(messages) {
-  const batchSize = PIPELINE_CONFIG.EMBEDDING_BATCH_SIZE || 100;
-  const concurrency = PIPELINE_CONFIG.DETECTION_EMBEDDING_CONCURRENCY || 5;
-  const delayMs = PIPELINE_CONFIG.DETECTION_EMBEDDING_BATCH_DELAY_MS || 200;
+  // Cloudflare often limits payload sizes or rate limits heavily. Let's send smaller, safer batches
+  const batchSize = 10;
+  const concurrency = 2;
+  const delayMs = 500;
 
   const results = new Map();
   let failCount = 0;
@@ -204,8 +204,7 @@ async function embedContextBlocks(blocks) {
           return; // success
         } catch (err) {
           const isLast = attempt === maxRetries;
-          logger.warn('embedder', `Context batch attempt ${attempt}/${maxRetries} failed`, {
-            error: err.message,
+          logger.warn('embedder', `Context batch attempt ${attempt}/${maxRetries} failed: ${err.message}`, {
             batchSize: batch.length,
           });
           if (isLast) {
