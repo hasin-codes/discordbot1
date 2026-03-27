@@ -89,12 +89,19 @@ client.once('clientReady', async () => {
           await runPipeline();
           log.info('[pipeline] Scheduled pipeline complete');
         } catch (err) {
-          log.error('[pipeline] Scheduled pipeline failed:', err.message);
+          log.error('[pipeline] Scheduled pipeline failed:', {
+            message: err.message,
+            stack: err.stack?.slice(0, 500),
+          });
         }
       }, 12 * 60 * 60 * 1000); // 12 hours
       
     } catch (err) {
-      log.error('[pipeline] Initial pipeline failed:', err.message);
+      log.error('[pipeline] Initial pipeline failed:', {
+        message: err.message,
+        stack: err.stack?.slice(0, 1000),
+        code: err.code,
+      });
       // Don't crash bot - pipeline failure is non-critical
     }
   }, 60000); // Wait 1 minute after bot starts
