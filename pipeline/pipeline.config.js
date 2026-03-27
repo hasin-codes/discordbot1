@@ -64,7 +64,7 @@ const PIPELINE_CONFIG = {
     'QDRANT_URL',
     'QDRANT_API_KEY',
     'QDRANT_PIPELINE_COLLECTION',
-    'GENERAL_CHAT_CHANNEL_ID',
+    // 'GENERAL_CHAT_CHANNEL_ID', // Not needed if community_messages_clean is pre-populated
   ],
 
   // Optional env vars
