@@ -12,9 +12,6 @@ const PIPELINE_CONFIG = {
   CONTEXT_WINDOW_SIZE: 3,
   CONTEXT_WINDOW_STEP: 1,
 
-  // Embedding — detection pass (Step 2)
-  DETECTION_EMBEDDING_CONCURRENCY: 5,
-  DETECTION_EMBEDDING_BATCH_DELAY_MS: 200,
 
   // Embedding — final pass (Step 4)
   EMBEDDING_BATCH_SIZE: 100,
@@ -23,9 +20,6 @@ const PIPELINE_CONFIG = {
   EMBEDDING_RETRY_BASE_MS: 200,
   EMBEDDING_MAX_RETRIES: 3,
 
-  // HDBSCAN (kept for optional use, no longer primary path)
-  HDBSCAN_MIN_CLUSTER_SIZE: 5,
-  HDBSCAN_MIN_SAMPLES: 3,
 
   // LLM Classifier (primary clustering path)
   CHAT_MODEL: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
@@ -43,7 +37,6 @@ const PIPELINE_CONFIG = {
 
   // Pipeline
   BATCH_WINDOW_HOURS: 12,
-  PYTHON_TIMEOUT_MS: 300_000,
   FETCH_CHUNK_SIZE: 1000,
 
   // Redis lock
