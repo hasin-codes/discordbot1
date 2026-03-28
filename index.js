@@ -90,38 +90,45 @@ client.once('clientReady', async () => {
   // Then schedule to run every 12 hours for incremental processing
   const { runPipeline } = require('./pipeline/src/index');
 
-  // Always schedule pipeline every 12h regardless of first-run outcome
-  setInterval(async () => {
-    try {
-      log.info('[pipeline] Running scheduled pipeline...');
-      await runPipeline();
-      log.info('[pipeline] Scheduled pipeline complete');
-    } catch (err) {
-      log.error('[pipeline] Scheduled pipeline failed:', {
-        message: err.message,
-        stack: err.stack?.slice(0, 500),
-      });
-      // Don't crash bot — retry at next interval
-    }
-  }, 12 * 60 * 60 * 1000); // 12 hours
+  // Check if pipeline should run (controlled via Railway environment variable)
+  const autoRunPipeline = process.env.AUTO_RUN_PIPELINE !== 'false';
 
-  // Run immediately on startup (1 min delay to let bot fully initialize)
-  setTimeout(async () => {
-    try {
-      log.info('[pipeline] Running initial pipeline on startup...');
-      await runPipeline();
-      log.info('[pipeline] Initial pipeline complete');
-    } catch (err) {
-      log.error('[pipeline] Initial pipeline failed:', {
-        message: err.message,
-        stack: err.stack?.slice(0, 1000),
-        code: err.code,
-      });
-      // Don't crash bot — will retry in 12 hours
-    }
-  }, 60000);
+  if (autoRunPipeline) {
+    // Schedule pipeline every 12h
+    setInterval(async () => {
+      try {
+        log.info('[pipeline] Running scheduled pipeline...');
+        await runPipeline();
+        log.info('[pipeline] Scheduled pipeline complete');
+      } catch (err) {
+        log.error('[pipeline] Scheduled pipeline failed:', {
+          message: err.message,
+          stack: err.stack?.slice(0, 500),
+        });
+        // Don't crash bot — retry at next interval
+      }
+    }, 12 * 60 * 60 * 1000); // 12 hours
 
-  log.info('Bot ready — pipeline runs on Railway, cleaning/retention via edge functions');
+    // Run immediately on startup (1 min delay to let bot fully initialize)
+    setTimeout(async () => {
+      try {
+        log.info('[pipeline] Running initial pipeline on startup...');
+        await runPipeline();
+        log.info('[pipeline] Initial pipeline complete');
+      } catch (err) {
+        log.error('[pipeline] Initial pipeline failed:', {
+          message: err.message,
+          stack: err.stack?.slice(0, 1000),
+          code: err.code,
+        });
+        // Don't crash bot — will retry in 12 hours
+      }
+    }, 60000);
+
+    log.info('Bot ready — pipeline runs on Railway, cleaning/retention via edge functions');
+  } else {
+    log.info('Bot ready — pipeline disabled (AUTO_RUN_PIPELINE=false), cleaning/retention via edge functions only');
+  }
 });
 
 // Graceful shutdown — close workers cleanly when process exits
