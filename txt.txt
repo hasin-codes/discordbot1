@@ -1,0 +1,98 @@
+PIPELINE UNUSED IMPORTS & DEAD CODE AUDIT
+Date: 2026-03-29
+Status: READ-ONLY REPORT — DO NOT DELETE YET, VERIFY FIRST
+
+============================================================
+CATEGORY 1: ENTIRELY DEAD FILES (safe to delete as a group)
+============================================================
+
+1. pipeline/src/clusterRunner.js
+   - Wraps the Python HDBSCAN script
+   - NEVER imported by index.js or any active module
+   - Whole file is dead
+
+2. pipeline/scripts/cluster.py
+   - Python HDBSCAN clustering script
+   - Only reachable through clusterRunner.js (which is dead)
+   - Whole file is dead
+
+3. pipeline/requirements.txt
+   - Python dependencies: hdbscan, numpy, scikit-learn
+   - ONLY used by cluster.py (which is dead)
+   - Whole file is dead
+
+============================================================
+CATEGORY 2: DEAD FUNCTION INSIDE AN ACTIVE FILE
+============================================================
+
+4. pipeline/src/storeResults.js → storeClusterResults() (lines ~33-146)
+   - Designed for HDBSCAN cluster results
+   - Exported but NEVER imported anywhere
+   - The OTHER function in this file (storeLLMResults or similar) IS active
+   - ACTION: Remove only this function, keep the file and the active function
+
+============================================================
+CATEGORY 3: UNUSED IMPORTS IN ACTIVE FILES
+============================================================
+
+5. pipeline/src/index.js → const path = require('path');
+   - Imported on line 1 but never referenced in the code body
+   - ACTION: Remove this one line
+
+============================================================
+CATEGORY 4: UNUSED CONFIG VALUES IN pipeline.config.js
+============================================================
+
+6. HDBSCAN_MIN_CLUSTER_SIZE (line ~30)
+   - Only read by dead clusterRunner.js
+
+7. HDBSCAN_MIN_SAMPLES (line ~31)
+   - Only read by dead clusterRunner.js
+
+8. PYTHON_TIMEOUT_MS (line ~48)
+   - Only read by dead clusterRunner.js
+
+9. DETECTION_EMBEDDING_CONCURRENCY (line ~16)
+   - Defined in config but embedder.js hardcodes its own value (line ~108)
+   - Config value is never read
+
+10. DETECTION_EMBEDDING_BATCH_DELAY_MS (line ~17)
+    - Defined in config but embedder.js hardcodes its own value (line ~109)
+    - Config value is never read
+
+============================================================
+CATEGORY 5: UNUSED NODE.JS DEPENDENCIES (package.json)
+============================================================
+
+11. openai
+    - Listed in package.json
+    - Pipeline and bot both use raw fetch() to Cloudflare AI Gateway
+    - OpenAI SDK is never imported anywhere
+
+12. uuid
+    - Listed in package.json
+    - Codebase uses native crypto.randomUUID() instead
+    - Never imported anywhere
+
+============================================================
+CATEGORY 6: MINOR CODE SMELL (not dead, just messy)
+============================================================
+
+13. pipeline/src/fetchMessages.js → let lastId = 0; (line ~61)
+    - Shadowed variable: lastId already declared on line ~34
+    - Not "unused" per se, but a bug-prone duplicate declaration
+    - ACTION: Fix by removing the re-declaration, not a deletion task
+
+============================================================
+SAFE REMOVAL ORDER (if you choose to clean up):
+============================================================
+
+Step 1: Delete the 3 dead files (clusterRunner.js, cluster.py, requirements.txt)
+Step 2: Remove storeClusterResults() from storeResults.js (keep the file)
+Step 3: Remove "const path = require('path');" from index.js
+Step 4: Remove the 5 unused config values from pipeline.config.js
+Step 5: Run the pipeline once to verify nothing breaks
+Step 6: Remove openai and uuid from package.json, run npm install
+Step 7: (Optional) Fix the lastId shadow in fetchMessages.js
+
+DO NOT skip step 5 — the pipeline must be tested after each group of changes.
