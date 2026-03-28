@@ -107,6 +107,12 @@ This system consists of three main components:
 
 The pipeline processes cleaned Discord messages to detect topic shifts and cluster conversations semantically. It runs every 12 hours on Railway (or can be triggered manually).
 
+### The Problem
+
+Discord support channels are a mess. A single day might have someone asking about API rate limits, another person complaining about billing, a third sharing a bug report, and ten people just vibing — all interleaved in the same channel. If you want to understand what your community is actually talking about, you can't just count keywords or split by time. A 30-minute window might contain three different conversations, and a single conversation might span two hours.
+
+The pipeline exists to solve this: **take a flat stream of Discord messages and carve it into semantically coherent conversations, each with a topic label** — without any manual labeling or training data.
+
 ### How the Pipeline Works
 
 #### Step 1: Fetch Messages
@@ -185,6 +191,36 @@ Writes to Supabase tables:
 - `pipeline_cluster_messages` — Message-cluster links
 - `pipeline_topic_summaries` — Daily topic summaries (optional)
 
+### Design Decisions
+
+#### Why TextTiling instead of time-window chunking?
+
+Time-window chunking (e.g., "split every 30 minutes") is simple but wrong — conversations don't follow clocks. A quick question gets its own 30-minute bucket even if it's one message, while a deep debugging session gets sliced in half at the 30-minute mark.
+
+We use **TextTiling** — an algorithm from NLP research that detects topic shifts by looking at semantic similarity between messages. It embeds each message, computes a similarity curve, and finds the valleys (where the topic changes). The result: segments that match how humans would naturally group a conversation.
+
+*Alternative considered:* HDBSCAN clustering on embeddings. We tried this initially — it required a Python subprocess (hdbscan, numpy, scikit-learn) and produced inconsistent cluster counts depending on hyperparameters. TextTiling is deterministic, runs in pure JavaScript, and produces segments with clear boundaries that the LLM can then label reliably.
+
+#### Why two-pass LLM classification instead of zero-shot?
+
+The naive approach: send each segment to an LLM and ask "what topic is this?" The problem: without a fixed label set, the LLM might call the same topic "API Issues" in one batch and "API Problems" in another. Labels drift, and your database becomes useless for aggregation.
+
+Our approach:
+1. **Pass 1 — Category Discovery:** Sample 15 representative segments, ask the LLM to find natural topic categories (it returns 8-15 labels). This is a one-time cost per run.
+2. **Pass 2 — Batch Classification:** Classify every segment using the fixed label set from pass 1.
+
+This guarantees consistent labels across the entire dataset, makes category counts meaningful, and costs roughly the same as zero-shot (the discovery pass is tiny).
+
+#### Why Cloudflare Workers AI instead of OpenAI/Anthropic?
+
+Cost and latency. This system processes thousands of messages per run — every embedding call, every classification call, every rerank goes through an LLM. Using OpenAI would cost real money per run. Cloudflare Workers AI provides:
+
+- **BGE-large-en-v1.5** for embeddings (1024-dim, competitive with OpenAI's text-embedding-3-small)
+- **Llama 3.3 70B** for classification (competitive with GPT-4 for short-label tasks)
+- **BGE-reranker-base** for reranking
+
+All on the free tier with no API key billing. The tradeoff: models are slightly less capable than frontier models, but for this use case (short message classification, not creative writing), the difference is negligible.
+
 ### Pipeline Configuration
 
 All tunable parameters are in `pipeline/pipeline.config.js`:
@@ -204,11 +240,7 @@ const PIPELINE_CONFIG = {
   CONTEXT_WINDOW_SIZE: 3,               // Messages per context block
   CONTEXT_WINDOW_STEP: 1,               // Step size for overlapping windows
 
-  // Embedding — detection pass
-  DETECTION_EMBEDDING_CONCURRENCY: 5,   // Concurrent embedding requests
-  DETECTION_EMBEDDING_BATCH_DELAY_MS: 200,
-
-  // Embedding — final pass
+  // Embedding
   EMBEDDING_BATCH_SIZE: 100,
   EMBEDDING_CONCURRENCY: 10,
   EMBEDDING_BATCH_DELAY_MS: 300,
@@ -231,7 +263,6 @@ const PIPELINE_CONFIG = {
 
   // Pipeline scheduling
   BATCH_WINDOW_HOURS: 12,               // Run interval
-  PYTHON_TIMEOUT_MS: 300_000,           // HDBSCAN subprocess timeout
   FETCH_CHUNK_SIZE: 1000,
 
   // Redis lock
