@@ -242,21 +242,31 @@ function calculateEngagementMetrics(segments) {
       messagesPerHour: 0,
     };
   }
-  
+
   const allMessages = segments.flatMap(s => s.messages);
   const uniqueUserIds = new Set(allMessages.map(m => m.user_id));
   const uniqueMessageIds = new Set(allMessages.map(m => m.message_id));
-  
+
   // Calculate time span
   const timestamps = allMessages.map(m => new Date(m.timestamp).getTime());
   const minTime = Math.min(...timestamps);
   const maxTime = Math.max(...timestamps);
-  const hoursSpan = Math.max(1, (maxTime - minTime) / (1000 * 60 * 60));
   
+  // Calculate hours span, handling edge cases
+  const durationMs = maxTime - minTime;
+  const durationHours = durationMs / (1000 * 60 * 60);
+  
+  // For very short clusters (< 1 minute), use minimum of 1 minute to avoid extreme outliers
+  // For clusters with 0 duration (all messages same timestamp), use 1 minute
+  const minDurationHours = 1 / 60; // 1 minute
+  const effectiveHours = Math.max(minDurationHours, durationHours);
+  
+  const messagesPerHour = uniqueMessageIds.size / effectiveHours;
+
   return {
     messageCount: uniqueMessageIds.size,
     uniqueUsers: uniqueUserIds.size,
-    messagesPerHour: parseFloat((uniqueMessageIds.size / hoursSpan).toFixed(2)),
+    messagesPerHour: parseFloat(messagesPerHour.toFixed(2)),
   };
 }
 

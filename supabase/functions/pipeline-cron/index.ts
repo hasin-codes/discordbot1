@@ -153,6 +153,50 @@ interface Segment {
   endTimestamp: string;
 }
 
+interface ContextBlock {
+  contextBlockId: string;
+  segmentIndex: number;
+  messageIds: string[];
+  contextText: string;
+  startTimestamp: string;
+  endTimestamp: string;
+  channelId: string;
+}
+
+/**
+ * Build context blocks from segments with real UUIDs.
+ * Each context block is a sliding window of messages within a segment.
+ */
+function buildContextBlocks(segments: Segment[]): ContextBlock[] {
+  const windowSize = 3; // Match PIPELINE_CONFIG.CONTEXT_WINDOW_SIZE
+  const allBlocks: ContextBlock[] = [];
+
+  for (const segment of segments) {
+    const { messages, segmentIndex, boundaryScore } = segment;
+    if (messages.length === 0) continue;
+
+    for (let i = 0; i < messages.length; i++) {
+      const windowStart = Math.max(0, i - windowSize + 1);
+      const windowMessages = messages.slice(windowStart, i + 1);
+      const lines = windowMessages.map((m) => `${m.username}: ${m.content}`);
+      const contextText = lines.join("\n");
+      const anchor = windowMessages[windowMessages.length - 1];
+
+      allBlocks.push({
+        contextBlockId: crypto.randomUUID(),
+        segmentIndex,
+        messageIds: windowMessages.map((m) => m.message_id),
+        contextText,
+        startTimestamp: windowMessages[0].timestamp,
+        endTimestamp: anchor.timestamp,
+        channelId: anchor.channel_id,
+      });
+    }
+  }
+
+  return allBlocks;
+}
+
 async function detectBoundaries(messages: CleanMessage[]): Promise<Segment[]> {
   const k = 3; // window size
   const threshold = 0.15;
@@ -364,6 +408,23 @@ async function storeResults(
   segments: Segment[],
   batchId: string
 ) {
+  // Build context blocks FIRST to get actual UUIDs for Supabase storage
+  const contextBlocks = buildContextBlocks(segments);
+  
+  // Build message → contextBlockId mapping
+  const messageToContextBlock = new Map<string, string[]>();
+  for (const block of contextBlocks) {
+    for (const msgId of block.messageIds) {
+      if (!messageToContextBlock.has(msgId)) {
+        messageToContextBlock.set(msgId, []);
+      }
+      // Store the context block UUID where this message is the anchor (last position)
+      if (block.messageIds[block.messageIds.length - 1] === msgId) {
+        messageToContextBlock.get(msgId)!.push(block.contextBlockId);
+      }
+    }
+  }
+
   // Group by topic label
   const labelGroups = new Map<string, Segment[]>();
   for (const seg of segments) {
@@ -405,13 +466,17 @@ async function storeResults(
       avg_boundary_score: bScores.length > 0 ? bScores.reduce((a, b) => a + b, 0) / bScores.length : null,
     });
 
+    // Build message join rows with REAL context block UUIDs
     for (const seg of groupSegs) {
       for (const m of seg.messages) {
+        const contextBlockIds = messageToContextBlock.get(m.message_id) || [];
+        const contextBlockId = contextBlockIds.length > 0 ? contextBlockIds[0] : null;
+        
         messageRows.push({
           batch_id: batchId,
           cluster_id: clusterId,
           message_id: m.message_id,
-          context_block_id: seg.segmentIndex.toString(),
+          context_block_id: contextBlockId, // REAL UUID from context blocks
           channel_id: m.channel_id || null,
           user_id: m.user_id || null,
         });

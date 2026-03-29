@@ -33,40 +33,9 @@ build/
 # Unit tests
 __tests__/
 
-# Pipeline tests
-pipeline/tests/
-
-# Test runner scripts
-test4-runner.js
-
-# Test output files
-*.test.js
-*.spec.js
-coverage/
-.nyc_output/
-
-# ===========================================
-# DEVELOPMENT & DEBUG SCRIPTS
-# ===========================================
-
-# Debug scripts
-_debug.js
-debug_*.js
-
-# Manual test scripts (not needed in production)
+# Test runner scripts (manual testing only)
 test-*.js
 *_test.js
-
-# Test data generation
-test-pipeline-report.js
-test-pipeline-real-data.js
-test-last-2000.js
-
-# One-shot scripts (run manually, not in production)
-scripts/runCleaning.js
-scripts/runRetentionCleanup.js
-scripts/seedMessages.js
-scripts/ingest.js
 
 # ===========================================
 # DOCUMENTATION (Keep essential, exclude dev docs)
@@ -87,11 +56,6 @@ l.md
 !DEPLOYMENT_CHECKLIST.md
 !PRODUCTION_FILES.md
 !RAILWAY_DEPLOY.md
-
-# Generated reports (from test runs)
-cluster-report.md
-report.md
-*-report.md
 
 # ===========================================
 # IDE & EDITOR FILES
@@ -145,14 +109,6 @@ dump.rdb
 
 # Supabase local
 .supabase/
-
-# Python cache (for HDBSCAN)
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-pipeline/scripts/*.pyc
 
 # Virtual environments
 venv/

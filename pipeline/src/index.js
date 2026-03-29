@@ -165,16 +165,20 @@ async function runPipeline() {
 
       allSegments = allSegments.concat(segments);
 
+      // Build context blocks FIRST to get actual UUIDs for Supabase storage
+      const contextBlocks = buildContextBlocks(segments);
+
       // LLM classification
       const classifications = await classifyPipeline(segments);
 
-      // Store to Supabase with processing_date
+      // Store to Supabase with context block UUIDs
       const { clusterRows, messageRows } = await storeSegmentClassifications(
         classifications,
         segments,
+        contextBlocks, // Pass context blocks for UUID mapping
         batchId,
         null, // Supabase client (uses default)
-        processingDate // NEW: Pass the processing date for date isolation
+        processingDate
       );
 
       totalSegments += segments.length;

@@ -27,12 +27,13 @@ function getSupabase() {
  *
  * @param {Map<number, string>} classifications - segmentIndex → topicLabel
  * @param {Array<{segmentIndex: number, messages: Array, boundaryScore: number|null, startTimestamp: string, endTimestamp: string}>} segments
+ * @param {Array<{contextBlockId: string, segmentIndex: number, messageIds: string[]}>} contextBlocks - Context blocks with real UUIDs
  * @param {string} batchId
  * @param {object} [client] - Optional Supabase client override (for testing)
  * @param {string} processingDate - Calendar date (YYYY-MM-DD) for date isolation
  * @returns {Promise<{clusterRows: number, messageRows: number, summaryRows: number}>}
  */
-async function storeSegmentClassifications(classifications, segments, batchId, client, processingDate) {
+async function storeSegmentClassifications(classifications, segments, contextBlocks, batchId, client, processingDate) {
   const db = client || getSupabase();
 
   // Validate processingDate
@@ -44,7 +45,7 @@ async function storeSegmentClassifications(classifications, segments, batchId, c
   // This ensures idempotent re-processing — running the pipeline for a specific
   // date will completely replace that date's data without duplicates
   logger.info('storeResults', `Deleting existing clusters for ${processingDate} (date isolation)`);
-  
+
   const { error: deleteClusterError } = await db
     .from('pipeline_clusters')
     .delete()
@@ -73,6 +74,21 @@ async function storeSegmentClassifications(classifications, segments, batchId, c
   }
 
   logger.info('storeResults', `Cleared existing data for ${processingDate}`);
+
+  // Build message → contextBlockId mapping from actual context blocks
+  // Each message can appear in multiple context blocks (sliding window), so we map to an array
+  const messageToContextBlock = new Map();
+  for (const block of contextBlocks) {
+    for (const msgId of block.messageIds) {
+      if (!messageToContextBlock.has(msgId)) {
+        messageToContextBlock.set(msgId, []);
+      }
+      // Store the context block UUID - use the block where this message is the anchor (last position)
+      if (block.messageIds[block.messageIds.length - 1] === msgId) {
+        messageToContextBlock.get(msgId).push(block.contextBlockId);
+      }
+    }
+  }
 
   // Group segments by topic label
   const labelGroups = new Map();
@@ -131,14 +147,19 @@ async function storeSegmentClassifications(classifications, segments, batchId, c
       processing_date: processingDate, // DATE ISOLATION: Explicit date column
     });
 
-    // Build message join rows
+    // Build message join rows with REAL context block UUIDs
     for (const seg of groupSegments) {
       for (const msg of seg.messages) {
+        // Get the context block UUID(s) for this message
+        const contextBlockIds = messageToContextBlock.get(msg.message_id) || [];
+        // Use the first (primary) context block UUID - this is where the message is the anchor
+        const contextBlockId = contextBlockIds.length > 0 ? contextBlockIds[0] : null;
+
         messageRows.push({
           batch_id: batchId,
           cluster_id: clusterId,
           message_id: msg.message_id,
-          context_block_id: seg.segmentIndex.toString(), // segment index as reference
+          context_block_id: contextBlockId, // REAL UUID from contextBuilder.js
           channel_id: msg.channel_id || null,
           user_id: msg.user_id || null,
           processing_date: processingDate, // DATE ISOLATION: Explicit date column
