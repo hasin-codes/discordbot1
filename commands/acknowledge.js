@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { getIssueByShortId, updateStatus, getAllThreadIssues } = require('../lib/issues');
 const { addNotifyJob } = require('../lib/queue');
-const { updateThreadBrief } = require('../lib/context');
+// const { updateThreadBrief } = require('../lib/context');
 
 module.exports = {
   data: new SlashCommandBuilder()
