@@ -16,9 +16,7 @@ When you enable auto-renewal and the current subscription plan price has increas
 - The charge is legitimate and reflects the updated subscription cost
 
 **If you believe this is an error:**
-1. Contact support with your User ID and payment receipt
-2. Provide screenshots of the charge and your subscription details
-3. Support will escalate to the tech team for review
+Ask the user for their User ID, payment receipt, screenshots of the charge, and subscription details for further review.
 
 ---
 

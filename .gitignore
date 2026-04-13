@@ -12,7 +12,7 @@ node_modules/
 
 # Logs
 *.log
-.test-results.txt
+quickreplymatrix.txt
 # Supabase
 supabase/.temp/
 supabase/.env
